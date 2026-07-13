@@ -87,4 +87,4 @@ SQLite at `/home/f42charlie/data/f42charlie.db`:
 
 ## MCP endpoint
 
-`https://charlie.tango4004.com/mcp`
+`https://c2.tango4004.com/mcp`
