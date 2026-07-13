@@ -142,27 +142,51 @@ def charlie():
 
         # tools/list
         if method == 'tools/list':
-            return mcp_response(id_, {"tools": [
+                    return mcp_response(id_, {"tools": [
                 {
                     "name": "step",
-                    "description": "Execute a command step. Returns new session_id.",
+                    "description": (
+                        "F42Charlie remote executor. Submit a command, get a new session_id.\n\n"
+                        "WORKFLOW:\n"
+                        "  1. step('', '', '') -> session_id\n"
+                        "  2. step(sid, 'claim', 'PASSPHRASE') -> auth_sid\n"
+                        "  3. step(auth_sid, CMD, ARGS) -> new_sid\n"
+                        "  4. request(new_sid) -> output\n\n"
+                        "COMMANDS (after claim):\n"
+                        "  exec <shell>                 run shell command\n"
+                        "  python write <path>\\n<code>  write Python file\n"
+                        "  python run <path>            run Python file\n\n"
+                        "RULES:\n"
+                        "  - Always call request() after step()\n"
+                        "  - Each session_id is single-use OTP\n"
+                        "  - Poll request() if 'still working'\n"
+                        "  - Resume: claim again -> returns active session_id\n\n"
+                        "EXAMPLE:\n"
+                        "  step('','','') -> 'falcon7392'\n"
+                        "  step('falcon7392','claim','four word pass') -> 'river4821'\n"
+                        "  step('river4821','exec','echo hello') -> 'stone2947'\n"
+                        "  request('stone2947') -> 'hello'"
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "session_id": {"type": "string"},
-                            "command": {"type": "string"},
-                            "argument": {"type": "string"}
+                            "session_id": {"type": "string", "description": "Current session_id, empty string to start"},
+                            "command": {"type": "string", "description": "empty/claim/exec/python"},
+                            "argument": {"type": "string", "description": "passphrase for claim, shell cmd for exec"}
                         },
                         "required": ["session_id", "command", "argument"]
                     }
                 },
                 {
                     "name": "request",
-                    "description": "Get result of last step. Returns output, 'still working', or 'invalid'.",
+                    "description": (
+                        "F42Charlie — get result of last step().\n"
+                        "Returns output | 'still working' (poll again) | 'invalid' (re-run step)."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "session_id": {"type": "string"}
+                            "session_id": {"type": "string", "description": "session_id from last step()"}
                         },
                         "required": ["session_id"]
                     }
