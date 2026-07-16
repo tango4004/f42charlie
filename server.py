@@ -57,7 +57,12 @@ def do_step(session_id, command, argument):
         if ws:
             active = db.get_active_session(ws['id'])
             if active:
-                return active['session_id']
+                resume_sid = active['session_id']
+                task_id = db.create_task(resume_sid, "_echo", "_echo", "session resumed. ready.", "/tmp")
+                db.set_task_running(task_id)
+                db.set_result(task_id, resume_sid, "session resumed. ready.")
+                db.set_task_done(task_id)
+                return resume_sid
             new_sid = db.create_session(ws['id'], authenticated=True)
             db.rotate_session(session_id, new_sid)
             # auto-help after successful auth
