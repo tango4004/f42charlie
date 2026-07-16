@@ -33,12 +33,20 @@ class DB:
     
     def _create_tables(self):
         """Create all required tables"""
+        # Migration: add plugins column if missing
+        try:
+            self.cursor.execute("ALTER TABLE workspaces ADD COLUMN plugins TEXT DEFAULT '[]'")
+            self.conn.commit()
+        except Exception:
+            pass
+
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS workspaces (
                 id TEXT PRIMARY KEY,
                 name TEXT,
                 workdir TEXT,
                 passphrase_hash TEXT UNIQUE,
+                plugins TEXT DEFAULT '[]',
                 created INTEGER
             )
         ''')
@@ -88,19 +96,37 @@ class DB:
                 return sid
         return "sess" + uuid.uuid4().hex[:12]
     
-    def create_workspace(self, name, workdir, passphrase_hash):
+    def create_workspace(self, name, workdir, passphrase_hash, plugins=None):
         """Create a new workspace and return workspace_id"""
         workspace_id = uuid.uuid4().hex
         now = int(time.time())
         
+        import json as _j
+        plugins_json = _j.dumps(plugins if plugins is not None else [])
         self.cursor.execute('''
-            INSERT INTO workspaces (id, name, workdir, passphrase_hash, created)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (workspace_id, name, workdir, passphrase_hash, now))
-        
+            INSERT INTO workspaces (id, name, workdir, passphrase_hash, plugins, created)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (workspace_id, name, workdir, passphrase_hash, plugins_json, now))
         self.conn.commit()
         return workspace_id
     
+    def get_workspace_plugins(self, workspace_id):
+        import json as _j
+        self.cursor.execute('SELECT plugins FROM workspaces WHERE id = ?', (workspace_id,))
+        row = self.cursor.fetchone()
+        if not row or not row[0]:
+            return []
+        try:
+            return _j.loads(row[0])
+        except Exception:
+            return []
+
+    def set_workspace_plugins(self, workspace_id, plugins):
+        import json as _j
+        self.cursor.execute('UPDATE workspaces SET plugins = ? WHERE id = ?',
+            (_j.dumps(plugins), workspace_id))
+        self.conn.commit()
+
     def get_workspace_by_passphrase(self, passphrase_hash):
         """Get workspace by passphrase hash"""
         self.cursor.execute('''

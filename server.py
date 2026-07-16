@@ -187,20 +187,34 @@ db = DB(DB_PATH)
 daemon = Daemon(db, PLUGINS_DIR)
 
 ADMIN_HTML = """
-<!DOCTYPE html><html><head><title>f42charlie admin</title></head><body>
+<!DOCTYPE html><html><head><title>f42charlie admin</title>
+<style>body{font-family:monospace;max-width:600px;margin:40px auto;padding:0 20px}
+input[type=text]{width:100%;padding:4px;margin-bottom:12px}
+.plugins label{display:inline-block;margin-right:16px}
+.result{background:#f0f0f0;padding:12px;margin-top:16px}
+code{background:#e0e0e0;padding:2px 6px}</style>
+</head><body>
 <h2>f42charlie — create workspace</h2>
 <form method="POST">
-  Name: <input name="name" required><br><br>
-  Workdir: <input name="workdir" value="/home/f42charlie/workspaces/" required><br><br>
+  Name: <input type="text" name="name" required><br>
+  Workdir: <input type="text" name="workdir" value="/home/f42charlie/workspaces/" required><br>
+  Plugins:<br>
+  <div class="plugins">
+    {% for plugin in available_plugins %}
+    <label><input type="checkbox" name="plugins" value="{{ plugin }}"> {{ plugin }}</label>
+    {% endfor %}
+  </div><br>
   <button type="submit">Create</button>
 </form>
 {% if passphrase %}
-<hr>
+<div class="result">
 <h3>Workspace created!</h3>
 <p><b>Name:</b> {{ name }}</p>
 <p><b>Passphrase:</b> <code>{{ passphrase }}</code></p>
 <p><b>Workdir:</b> {{ workdir }}</p>
-<p style="color:red">Save passphrase now — it won't be shown again.</p>
+<p><b>Plugins:</b> {{ enabled_plugins | join(', ') or 'none' }}</p>
+<p style="color:red">Save passphrase now — it won\'t be shown again.</p>
+</div>
 {% endif %}
 </body></html>
 """
@@ -247,7 +261,9 @@ def do_step(session_id, command, argument):
             help_text = "available: help, claim"
             new_sid = db.create_session(None, authenticated=False)
         else:
-            help_text = "available: help, claim, exec, python"
+            allowed = db.get_workspace_plugins(session['workspace_id'])
+            cmds = ["help", "claim"] + allowed
+            help_text = "available: " + ", ".join(cmds)
             new_sid = db.create_session(session['workspace_id'], authenticated=True)
         db.rotate_session(session_id, new_sid)
         task_id = db.create_task(new_sid, "_echo", "_echo", help_text, "/tmp")
@@ -274,6 +290,18 @@ def do_step(session_id, command, argument):
         task_id = db.create_task(new_sid, "_echo", "_echo", "error: workspace not found", "/tmp")
         db.set_task_running(task_id)
         db.set_result(task_id, new_sid, "error: workspace not found")
+        db.set_task_done(task_id)
+        return new_sid
+
+    # check plugin is allowed for this workspace
+    allowed = db.get_workspace_plugins(session['workspace_id'])
+    if command not in allowed:
+        new_sid = db.create_session(session['workspace_id'], authenticated=True)
+        db.rotate_session(session_id, new_sid)
+        msg = f"error: plugin '{command}' not enabled for this workspace. available: {', '.join(allowed) or 'none'}"
+        task_id = db.create_task(new_sid, "_echo", "_echo", msg, "/tmp")
+        db.set_task_running(task_id)
+        db.set_result(task_id, new_sid, msg)
         db.set_task_done(task_id)
         return new_sid
 
@@ -412,18 +440,27 @@ def charlie():
 
 @app.route('/charlie/admin', methods=['GET', 'POST'])
 def admin():
+    import os
     passphrase = None
     name = workdir = ''
+    enabled_plugins = []
+    # discover available plugins from plugins/ dir
+    available_plugins = sorted([
+        f[:-3] for f in os.listdir(PLUGINS_DIR)
+        if f.endswith('.py') and not f.startswith('_') and f != '__init__.py'
+    ])
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
         workdir = request.form.get('workdir', '').strip()
+        enabled_plugins = request.form.getlist('plugins')
         if name and workdir:
-            import os
             os.makedirs(workdir, exist_ok=True)
             passphrase = generate_passphrase()
             h = hash_passphrase(passphrase)
-            db.create_workspace(name, workdir, h)
-    return render_template_string(ADMIN_HTML, passphrase=passphrase, name=name, workdir=workdir)
+            db.create_workspace(name, workdir, h, plugins=enabled_plugins)
+    return render_template_string(ADMIN_HTML,
+        passphrase=passphrase, name=name, workdir=workdir,
+        available_plugins=available_plugins, enabled_plugins=enabled_plugins)
 
 if __name__ == '__main__':
     daemon.start()
