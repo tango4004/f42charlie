@@ -60,6 +60,26 @@ def do_step(session_id, command, argument):
                 return active['session_id']
             new_sid = db.create_session(ws['id'], authenticated=True)
             db.rotate_session(session_id, new_sid)
+            # auto-help after successful auth
+            claim_help = """authenticated. workspace ready.
+
+commands:
+  help                          — show this message
+  exec <shell command>          — run shell command in workspace
+  python write <path>\\n<code>   — write Python file (path on line 1, code after \\n)
+  python run <path>             — run Python file
+
+examples:
+  exec ls -la
+  exec pip3 install requests -q
+  python write /tmp/hello.py\\nprint('hello world')
+  python run /tmp/hello.py
+
+result always via request(session_id). poll if 'still working'."""
+            task_id = db.create_task(new_sid, "_echo", "_echo", claim_help, "/tmp")
+            db.set_task_running(task_id)
+            db.set_result(task_id, new_sid, claim_help)
+            db.set_task_done(task_id)
             return new_sid
         # неверная фраза
         new_sid = db.create_session(None, authenticated=False)
