@@ -66,32 +66,41 @@ def do_step(session_id, command, argument):
         db.rotate_session(session_id, new_sid)
         return new_sid
 
-    # 4. help (доступно всем)
-    if command == "help":
-        new_sid = db.create_session(None, authenticated=False) if not session.get('authenticated') else db.create_session(session['workspace_id'], authenticated=True)
-        db.rotate_session(session_id, new_sid)
+    # 4. help + пустая команда — результат через request()
+    if command in ("help", "") or not command:
         if not session.get('authenticated'):
-            return f"{new_sid} available: help, claim"
-        return f"{new_sid} available: help, claim, exec, python"
-
-    # 5. пустая команда → help
-    if not command:
-        new_sid = db.create_session(None, authenticated=False)
+            help_text = "available: help, claim"
+            new_sid = db.create_session(None, authenticated=False)
+        else:
+            help_text = "available: help, claim, exec, python"
+            new_sid = db.create_session(session['workspace_id'], authenticated=True)
         db.rotate_session(session_id, new_sid)
-        return f"{new_sid} available: help, claim"
+        task_id = db.create_task(new_sid, "_echo", "_echo", help_text, "/tmp")
+        db.set_task_running(task_id)
+        db.set_result(task_id, new_sid, help_text)
+        db.set_task_done(task_id)
+        return new_sid
 
     # 6. проверить аутентификацию
     if not session.get('authenticated'):
         new_sid = db.create_session(None, authenticated=False)
         db.rotate_session(session_id, new_sid)
-        return f"{new_sid} not authenticated. use: claim <passphrase>"
+        task_id = db.create_task(new_sid, "_echo", "_echo", "not authenticated. use: claim <passphrase>", "/tmp")
+        db.set_task_running(task_id)
+        db.set_result(task_id, new_sid, "not authenticated. use: claim <passphrase>")
+        db.set_task_done(task_id)
+        return new_sid
 
     # 7. создать задачу для плагина
     ws = db.get_workspace(session['workspace_id'])
     if not ws:
         new_sid = db.create_session(None, authenticated=False)
         db.rotate_session(session_id, new_sid)
-        return f"{new_sid} error: workspace not found"
+        task_id = db.create_task(new_sid, "_echo", "_echo", "error: workspace not found", "/tmp")
+        db.set_task_running(task_id)
+        db.set_result(task_id, new_sid, "error: workspace not found")
+        db.set_task_done(task_id)
+        return new_sid
 
     plugin = command
     if command in ('python',):
