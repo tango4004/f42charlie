@@ -57,35 +57,12 @@ def do_step(session_id, command, argument):
         if ws:
             active = db.get_active_session(ws['id'])
             if active:
-                resume_sid = active['session_id']
-                task_id = db.create_task(resume_sid, "_echo", "_echo", "session resumed. ready.", "/tmp")
-                db.set_task_running(task_id)
-                db.set_result(task_id, resume_sid, "session resumed. ready.")
-                db.set_task_done(task_id)
-                return resume_sid
+                # resume — run help to confirm
+                return do_step(active['session_id'], "help", "")
             new_sid = db.create_session(ws['id'], authenticated=True)
             db.rotate_session(session_id, new_sid)
-            # auto-help after successful auth
-            claim_help = """authenticated. workspace ready.
-
-commands:
-  help                          — show this message
-  exec <shell command>          — run shell command in workspace
-  python write <path>\\n<code>   — write Python file (path on line 1, code after \\n)
-  python run <path>             — run Python file
-
-examples:
-  exec ls -la
-  exec pip3 install requests -q
-  python write /tmp/hello.py\\nprint('hello world')
-  python run /tmp/hello.py
-
-result always via request(session_id). poll if 'still working'."""
-            task_id = db.create_task(new_sid, "_echo", "_echo", claim_help, "/tmp")
-            db.set_task_running(task_id)
-            db.set_result(task_id, new_sid, claim_help)
-            db.set_task_done(task_id)
-            return new_sid
+            # successful auth — run help
+            return do_step(new_sid, "help", "")
         # неверная фраза
         new_sid = db.create_session(None, authenticated=False)
         db.rotate_session(session_id, new_sid)
