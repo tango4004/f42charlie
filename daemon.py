@@ -29,6 +29,11 @@ class Daemon(threading.Thread):
             self._stop_event.wait(1.0)
 
     def _run_plugin(self, task: dict):
+        # _echo: instant result, no subprocess needed
+        if task['plugin'] == '_echo':
+            self.db.set_result(task['task_id'], task['session_id'], task['argument'])
+            self.db.set_task_done(task['task_id'])
+            return
         plugin_path = f"{self.plugins_dir}/{task['plugin']}.py"
         try:
             # Check if plugin file exists
