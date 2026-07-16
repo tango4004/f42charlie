@@ -212,12 +212,12 @@ def mcp_error(id_, code, message):
     return jsonify({"jsonrpc": "2.0", "id": id_, "error": {"code": code, "message": message}})
 
 def do_step(session_id, command, argument):
-    # 1. пустой session_id → новая неаутентифицированная сессия
+    # 1. empty session_id -> create new unauthenticated session
     if not session_id:
         sid = db.create_session(None, authenticated=False)
         return sid
 
-    # 2. проверить сессию
+    # 2. validate session
     session = db.get_session(session_id)
     if not session:
         sid = db.create_session(None, authenticated=False)
@@ -236,12 +236,12 @@ def do_step(session_id, command, argument):
             db.rotate_session(session_id, new_sid)
             # successful auth — run help
             return do_step(new_sid, "help", "")
-        # неверная фраза
+        # wrong passphrase
         new_sid = db.create_session(None, authenticated=False)
         db.rotate_session(session_id, new_sid)
         return new_sid
 
-    # 4. help + пустая команда — rotate sid, результат через request()
+    # 4. help + empty command — rotate sid, result via request()
     if command in ("help", "") or not command:
         if not session.get('authenticated'):
             help_text = "available: help, claim"
@@ -256,7 +256,7 @@ def do_step(session_id, command, argument):
         db.set_task_done(task_id)
         return new_sid
 
-    # 6. проверить аутентификацию
+    # 6. check authentication
     if not session.get('authenticated'):
         new_sid = db.create_session(None, authenticated=False)
         db.rotate_session(session_id, new_sid)
@@ -266,7 +266,7 @@ def do_step(session_id, command, argument):
         db.set_task_done(task_id)
         return new_sid
 
-    # 7. создать задачу для плагина
+    # 7. create plugin task
     ws = db.get_workspace(session['workspace_id'])
     if not ws:
         new_sid = db.create_session(None, authenticated=False)
