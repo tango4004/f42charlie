@@ -68,7 +68,7 @@ def do_step(session_id, command, argument):
         db.rotate_session(session_id, new_sid)
         return new_sid
 
-    # 4. help + пустая команда — результат через request()
+    # 4. help + пустая команда — rotate sid, результат через request()
     if command in ("help", "") or not command:
         if not session.get('authenticated'):
             help_text = "available: help, claim"
