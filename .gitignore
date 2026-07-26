@@ -5,3 +5,5 @@ __pycache__/
 ../data/
 ../workspaces/
 ../backup/
+*.bak
+*.m2
